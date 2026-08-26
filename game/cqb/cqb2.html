@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>CQB 战术行动 · 二期</title>
+<style>
+  html, body { margin:0; height:100%; overflow:hidden; background:#05070C; }
+  #cv { display:block; width:100vw; height:100vh; cursor:none; }
+  .hud { position:fixed; font-family:"Segoe UI",system-ui,"Microsoft YaHei",sans-serif;
+         color:#E8ECF5; pointer-events:none; z-index:5; }
+  .hidden { display:none !important; }
+
+  /* ---- 主菜单 ---- */
+  #menu { inset:0; z-index:30; display:flex; align-items:center; justify-content:center;
+          background:rgba(5,7,12,.92); pointer-events:auto; }
+  .panel { width:300px; text-align:center; }
+  .panel h1 { font-size:34px; margin:0 0 6px; letter-spacing:2px; }
+  .bar { width:86px; height:5px; border-radius:3px; margin:0 auto 30px;
+         background:linear-gradient(90deg,#7C5CFF,#FF5C7A); }
+  .mbtn { display:block; width:100%; margin-bottom:14px; padding:14px;
+          background:rgba(124,92,255,.12); border:1px solid rgba(124,92,255,.45);
+          border-radius:12px; color:#E8ECF5; font-size:17px; cursor:pointer;
+          transition:background .15s, transform .1s; }
+  .mbtn:hover:not(:disabled) { background:rgba(124,92,255,.3); transform:translateY(-2px); }
+  .mbtn:disabled { opacity:.35; cursor:not-allowed; }
+  .mbtn small { display:block; font-size:11px; color:#8E93B0; margin-top:4px; }
+  .tip { font-size:12px; color:#8E93B0; line-height:1.7; }
+
+  /* ---- 游戏 HUD ---- */
+  #chips { top:64px; left:186px; display:flex; gap:10px; font-size:14px; }
+  .chip { background:rgba(10,14,24,.72); border:1px solid rgba(124,92,255,.25);
+          border-radius:10px; padding:6px 14px; }
+  .chip b { color:#CFD3FF; }
+  #killfeed { top:64px; right:16px; text-align:right; font-size:13px; }
+  #killfeed div { margin-bottom:4px; background:rgba(10,14,24,.6);
+                  padding:4px 10px; border-radius:8px; }
+  #weapon { bottom:26px; right:22px; text-align:right; }
+  #wname { font-size:16px; font-weight:700; letter-spacing:1px; }
+  #ammo { font-size:30px; font-weight:700; color:#CFD3FF; }
+  #reload { width:150px; height:5px; background:rgba(255,255,255,.15);
+            border-radius:3px; margin-top:6px; margin-left:auto; overflow:hidden; }
+  #reloadFill { height:100%; width:0%; background:#FFC24B; }
+  #hpwrap { bottom:26px; left:50%; transform:translateX(-50%); width:280px; }
+  #hpbg { height:12px; background:rgba(255,255,255,.12); border-radius:6px; overflow:hidden; }
+  #hpfill { height:100%; width:100%; background:#5AD07A; transition:width .12s; }
+  #hptext { font-size:12px; text-align:center; margin-top:4px; color:#B9BEE8; }
+  #vignette { inset:0; background:radial-gradient(circle, transparent 55%,
+              rgba(255,40,40,.55)); opacity:0; transition:opacity .25s; z-index:6; }
+  #respawnTxt { inset:0; display:flex; align-items:center; justify-content:center;
+                font-size:30px; font-weight:700; color:#FF7B7B;
+                text-shadow:0 2px 12px rgba(0,0,0,.8); z-index:7; }
+  #center { inset:0; display:flex; align-items:center; justify-content:center;
+            flex-direction:column; background:rgba(4,6,12,.66); z-index:8; }
+  #center h2 { font-size:40px; margin:0 0 10px; }
+  #center p { color:#B9BEE8; margin:0 0 24px; font-size:15px; }
+  #center button { pointer-events:auto; background:#7C5CFF; color:#fff; border:none;
+                   border-radius:10px; padding:12px 30px; font-size:17px; cursor:pointer; }
+
+  /* ---- 小地图 ---- */
+  #minimap { position:fixed; top:14px; left:14px; z-index:5;
+             border:1px solid rgba(124,92,255,.35); border-radius:8px;
+             box-shadow:0 6px 18px rgba(0,0,0,.5); pointer-events:none; }
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<canvas id="minimap" class="hud hidden" width="168" height="120"></canvas>
+
+<!-- 游戏 HUD(进入对局后显示) -->
+<div id="gamehud" class="hidden">
+  <div class="hud" id="chips">
+    <div class="chip">击杀 <b id="kills">0</b> / 15</div>
+    <div class="chip">死亡 <b id="deaths">0</b></div>
+  </div>
+  <div class="hud" id="killfeed"></div>
+  <div class="hud" id="weapon">
+    <div id="wname">步枪</div>
+    <div id="ammo"><span id="mag">30</span><span style="font-size:14px;color:#8E93B0"> / ∞</span></div>
+    <div id="reload"><div id="reloadFill"></div></div>
+  </div>
+  <div class="hud" id="hpwrap">
+    <div id="hpbg"><div id="hpfill"></div></div>
+    <div id="hptext">100 / 100</div>
+  </div>
+  <div class="hud" id="vignette"></div>
+  <div class="hud hidden" id="respawnTxt"></div>
+  <div class="hud" id="center">
+    <h2 id="ovTitle">战术行动</h2>
+    <p id="ovText">消灭 BOT,率先达成 15 杀。</p>
+    <button id="startBtn">开始行动</button>
+  </div>
+</div>
+
+<!-- 主菜单 -->
+<div id="menu" class="hud">
+  <div class="panel">
+    <h1>CQB 战术行动</h1>
+    <div class="bar"></div>
+    <button class="mbtn" id="btnSolo">🎯 单人练习<small>办公楼 · 对阵 1 名 BOT · 先达 15 杀</small></button>
+    <button class="mbtn" id="btnHost" disabled title="二期下半开通">🌐 创建房间<small>同一 WiFi 输房间码即连</small></button>
+    <button class="mbtn" id="btnJoin" disabled title="二期下半开通">🔗 加入房间<small>输入房主的房间码</small></button>
+    <p class="tip">WASD 移动 · 鼠标瞄准射击 · 1/2/3 切枪<br>R 换弹 · Shift 静步 · 视野有限,注意拐角</p>
+  </div>
+</div>
+
+<script>window.CQB_NO_AUTOBOOT = true;</script>
+<script src="cqb1.js"></script>
+<script src="cqb2.js"></script>
+</body>
+</html>
