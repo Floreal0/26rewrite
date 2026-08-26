@@ -1,0 +1,70 @@
+name: Deploy Games to Pages
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "game/**"
+      - ".github/workflows/deploy-games.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+
+      - name: Assemble multi-game site
+        run: |
+          mkdir -p site
+          # 扫描 game/ 下所有带 index.html 的子文件夹,原样收进站点
+          for d in game/*/ ; do
+            name=$(basename "$d")
+            [ -f "${d}index.html" ] || continue
+            mkdir -p "site/${name}"
+            cp -r "${d}"* "site/${name}/"
+            echo "collected: ${name}"
+          done
+          # 自动生成大厅页(卡片标题取自各游戏 <title>)
+          {
+            echo '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">'
+            echo '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            echo '<title>小游戏合集</title><style>'
+            echo 'body{font-family:system-ui,"Segoe UI","Microsoft YaHei",sans-serif;background:#EDF1F9;color:#2B3040;margin:0;display:flex;flex-direction:column;align-items:center;padding:60px 16px}'
+            echo 'h1{margin:0 0 6px}.bar{width:86px;height:5px;border-radius:3px;background:linear-gradient(90deg,#7C5CFF,#FF5C7A);margin-bottom:40px}'
+            echo '.grid{display:flex;flex-wrap:wrap;gap:18px;justify-content:center;max-width:760px}'
+            echo 'a.card{display:block;width:200px;background:#fff;border-radius:18px;padding:28px 20px;text-align:center;text-decoration:none;color:#2B3040;box-shadow:0 10px 26px rgba(38,50,72,.12);transition:transform .15s ease}'
+            echo 'a.card:hover{transform:translateY(-4px)}a.card .ico{font-size:42px}a.card b{display:block;margin-top:12px;font-size:18px}'
+            echo '</style></head><body><h1>小游戏合集</h1><div class="bar"></div><div class="grid">'
+            for d in game/*/ ; do
+              name=$(basename "$d")
+              [ -f "${d}index.html" ] || continue
+              title=$(grep -o '<title>[^<]*</title>' "${d}index.html" | head -1 | sed 's/<[^>]*>//g')
+              case "$name" in
+                2048) ico="🔢" ;;
+                snake|tanqiu) ico="🐍" ;;
+                *) ico="🎲" ;;
+              esac
+              echo "<a class='card' href='./${name}/'><span class='ico'>${ico}</span><b>${title:-${name}}</b></a>"
+            done
+            echo '</div><p style="color:#9BA0C0;font-size:13px;margin-top:40px">用 Python 与 ♥ 制作 · <a style="color:inherit" href="https://github.com/Floreal0/RewriteBox">源码</a></p></body></html>'
+          } > site/index.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
