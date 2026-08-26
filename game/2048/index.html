@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>2048 · Web</title>
+<meta name="description" content="经典 2048 小游戏 · 浅色玻璃风格 · 支持键盘与触屏滑动,打开即玩,无需安装。">
+<meta property="og:title" content="2048 · 在线试玩">
+<meta property="og:description" content="经典 2048 小游戏,滑动合并方块冲向 2048。打开即玩,无需安装任何东西。">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23FFB300'/%3E%3Ctext x='32' y='43' font-size='30' font-weight='700' text-anchor='middle' fill='%233B2F00' font-family='Arial,sans-serif'%3E8%3C/text%3E%3C/svg%3E">
+<style>
+  :root {
+    --cell: 78px; --gap: 6px; --bw: 342px;
+    --ink: #2B3040; --muted: #7A8199; --accent: #7C5CFF;
+    --page: #EDF1F9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--page); color: var(--ink);
+    font-family: "Segoe UI", system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 24px 12px; user-select: none; -webkit-user-select: none;
+  }
+  main { width: var(--bw); }
+
+  .top { display: flex; align-items: center; margin-bottom: 10px; }
+  .brand h1 { margin: 0; font-size: 44px; line-height: 1; letter-spacing: 1px; }
+  .bar { width: 86px; height: 5px; border-radius: 3px; margin-top: 4px;
+         background: linear-gradient(90deg, var(--accent), #FF5C7A); }
+  .chips { margin-left: auto; display: flex; gap: 8px; }
+  .chip { background: #fff; border: 1px solid rgba(15,18,38,.12); border-radius: 14px;
+          padding: 5px 16px; text-align: center; min-width: 72px; }
+  .chip span { display: block; font-size: 12px; color: var(--muted); }
+  .chip b { display: block; font-size: 22px; }
+
+  .sub { display: flex; align-items: center; margin-bottom: 12px; gap: 8px; }
+  .hint { font-size: 13px; color: var(--muted); }
+  .sub button { margin-left: auto; }
+
+  button.primary {
+    background: var(--accent); color: #fff; border: none; border-radius: 10px;
+    padding: 9px 18px; font-size: 15px; cursor: pointer; font-weight: 600;
+  }
+  button.primary:hover { filter: brightness(1.08); }
+  button.ghost {
+    background: transparent; color: var(--accent); border: none;
+    font-size: 15px; cursor: pointer; padding: 9px 12px;
+  }
+
+  #boardWrap { position: relative; width: var(--bw); height: var(--bw);
+               touch-action: none; }
+  #board { position: absolute; inset: 0; background: linear-gradient(135deg,#fff,#EFF3FB);
+           border-radius: 22px; box-shadow: 0 12px 34px rgba(38,50,72,.16); }
+
+  .slot, .tile {
+    position: absolute; width: var(--cell); height: var(--cell);
+    border-radius: 10px;
+  }
+  .slot { background: rgba(15,18,38,.09); border: 1px solid rgba(15,18,38,.12); }
+  .tile { transition: transform 110ms ease-in-out; will-change: transform; z-index: 2; }
+
+  .face {
+    width: 100%; height: 100%; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 30px;
+  }
+  .face.f3 { font-size: 25px; } .face.f4 { font-size: 20px; }
+
+  .t2     { background: #E9EDF8; color: #4A5068; }
+  .t4     { background: #DCE3F5; color: #4A5068; }
+  .t8     { background: linear-gradient(135deg,#FF9A5A,#FF6B6B); color: #fff;
+            box-shadow: 0 4px 18px rgba(255,107,107,.19); }
+  .t16    { background: linear-gradient(135deg,#FF8A5C,#FF5C7A); color: #fff;
+            box-shadow: 0 4px 18px rgba(255,92,122,.19); }
+  .t32    { background: linear-gradient(135deg,#FF5C7A,#FF3D68); color: #fff;
+            box-shadow: 0 4px 18px rgba(255,61,104,.22); }
+  .t64    { background: linear-gradient(135deg,#FF3D68,#D91752); color: #fff;
+            box-shadow: 0 4px 18px rgba(255,61,104,.27); }
+  .t128   { background: linear-gradient(135deg,#FFC24B,#FF9A3D); color: #3B2410;
+            box-shadow: 0 4px 18px rgba(255,154,61,.22); }
+  .t256   { background: linear-gradient(135deg,#FFB53D,#FF8A00); color: #3B2400;
+            box-shadow: 0 4px 18px rgba(255,138,0,.26); }
+  .t512   { background: linear-gradient(135deg,#9B5CFF,#6C2BD9); color: #fff;
+            box-shadow: 0 4px 18px rgba(108,43,217,.30); }
+  .t1024  { background: linear-gradient(135deg,#6C2BD9,#491490); color: #fff;
+            box-shadow: 0 4px 18px rgba(73,20,144,.35); }
+  .t2048  { background: linear-gradient(135deg,#FFE066,#FFB300); color: #3B2F00;
+            box-shadow: 0 4px 24px rgba(255,195,0,.52); }
+  .tsuper { background: #12142A; color: #F0F1FA; border: 1px solid rgba(124,92,255,.33);
+            box-shadow: 0 4px 18px rgba(124,92,255,.33); }
+
+  @keyframes spawnIn { from { transform: scale(0); } to { transform: scale(1); } }
+  @keyframes popB { 0% { transform: scale(1); } 50% { transform: scale(1.22); } 100% { transform: scale(1); } }
+  .face.spawn { animation: spawnIn 150ms ease-out backwards; }
+  .face.pop   { animation: popB 170ms ease-out; }
+
+  #overlay {
+    position: absolute; inset: 0; z-index: 10; border-radius: 22px;
+    background: rgba(237,241,249,.72); backdrop-filter: blur(5px);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #overlay.hidden { display: none; }
+  .card {
+    background: #fff; border-radius: 16px; padding: 26px 34px; text-align: center;
+    box-shadow: 0 16px 40px rgba(38,50,72,.25); max-width: 260px;
+  }
+  .card h2 { margin: 0 0 8px; font-size: 24px; }
+  .card p { margin: 0 0 16px; font-size: 14px; color: var(--muted); white-space: pre-line; }
+  .btns { display: flex; justify-content: center; gap: 6px; }
+
+  .foot { margin-top: 14px; font-size: 12px; color: var(--muted); text-align: center; }
+</style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <div class="brand"><h1>2048</h1><div class="bar"></div></div>
+    <div class="chips">
+      <div class="chip"><span>分数</span><b id="score">0</b></div>
+      <div class="chip"><span>最高</span><b id="best">0</b></div>
+    </div>
+  </header>
+  <div class="sub">
+    <span class="hint">合并方块,冲向 2048!</span>
+    <button class="primary" id="newGame">新游戏</button>
+  </div>
+  <div id="boardWrap">
+    <div id="board"></div>
+    <div id="overlay" class="hidden">
+      <div class="card">
+        <h2 id="ovTitle"></h2>
+        <p id="ovText"></p>
+        <div class="btns" id="ovBtns"></div>
+      </div>
+    </div>
+  </div>
+  <p class="foot">方向键 / WASD 移动 · 触屏滑动 · R 重开 · 最高分自动保存<br>
+    <a href="https://github.com/Floreal0/RewriteBox/tree/main/game/2048"
+       target="_blank" rel="noopener"
+       style="color:#9BA0C0;text-decoration:none;border-bottom:1px dotted #9BA0C0;">用 Python 与 ♥ 制作 · 源码在 GitHub</a>
+  </p>
+</main>
+
+<script>
+/* 2048 游戏核心逻辑(JS 版)——移植自 core.py,贪心配对规则一致。
+   浏览器里直接用全局;node 里可 require 做单元测试。 */
+(function (global) {
+  "use strict";
+
+  const SIZE = 4;
+
+  class Tile {
+    constructor(value, r, c) {
+      this.value = value;
+      this.r = r;
+      this.c = c;
+      this.dying = false;   // 合并后待移除(UI 在动画结束后再真正删节点)
+      this.grew = false;    // 本次合并翻倍(UI 据此做 pop 动画)
+    }
+  }
+
+  class Game {
+    constructor(bestLoader) {
+      this.bestLoader = bestLoader || function () { return 0; };
+      this.best = this.bestLoader();
+      this.reset();
+    }
+
+    reset() {
+      this.score = 0;
+      this.won = false;
+      this.over = false;
+      this.tiles = [];
+      this.grid = emptyGrid();
+      this.spawn();
+      this.spawn();
+    }
+
+    spawn() {
+      const empty = [];
+      for (let r = 0; r < SIZE; r++)
+        for (let c = 0; c < SIZE; c++)
+          if (!this.grid[r][c]) empty.push([r, c]);
+      if (!empty.length) return null;
+      const [r, c] = empty[Math.floor(Math.random() * empty.length)];
+      const t = new Tile(Math.random() < 0.1 ? 4 : 2, r, c);
+      this.grid[r][c] = t;
+      this.tiles.push(t);
+      return t;
+    }
+
+    /* 把棋盘拆成线,每条线按"靠目的地一侧在前"排列 */
+    *eachLine(dir) {
+      const rng = [0, 1, 2, 3];
+      if (dir === "left" || dir === "right") {
+        for (const r of rng) {
+          const line = rng.map((c) => [r, c, this.grid[r][c]]);
+          yield dir === "left" ? line : line.slice().reverse();
+        }
+      } else {
+        for (const c of rng) {
+          const line = rng.map((r) => [r, c, this.grid[r][c]]);
+          yield dir === "up" ? line : line.slice().reverse();
+        }
+      }
+    }
+
+    /* 计划阶段:标记移动/合并,不销毁方块(UI 先播滑动动画) */
+    move(dir) {
+      let moved = false;
+      let gained = 0;
+      for (const lineCells of this.eachLine(dir)) {
+        const present = lineCells.map((x) => x[2]).filter((t) => t);
+        let slot = 0;
+        for (let i = 0; i < present.length; i++) {
+          const a = present[i];
+          const fr = lineCells[slot][0], fc = lineCells[slot][1];
+          if (a.r !== fr || a.c !== fc) { moved = true; a.r = fr; a.c = fc; }
+          const b = present[i + 1];
+          if (b && b.value === a.value) {
+            b.dying = true;
+            b.r = fr; b.c = fc;
+            a.value *= 2;
+            a.grew = true;              // 到站后弹一下
+            gained += a.value;
+            moved = true;
+            i++;                        // 贪心跳过配对块
+          }
+          slot++;
+        }
+      }
+      if (!moved) return false;
+      this.score += gained;
+      if (this.score > this.best) this.best = this.score;
+      if (!this.won && this.tiles.some((t) => t.value >= 2048)) this.won = true;
+      return true;
+    }
+
+    /* 提交阶段:动画结束后调用——清理死块、重建格、出生新块、判死局。
+       注意:grew 标记留给 UI 播放合并弹跳后自行清除。 */
+    commit() {
+      this.tiles = this.tiles.filter((t) => !t.dying);
+      this.grid = emptyGrid();
+      for (const t of this.tiles) this.grid[t.r][t.c] = t;
+      const spawned = this.spawn();
+      this.over = !this.movesAvailable();
+      return spawned;
+    }
+
+    movesAvailable() {
+      for (let r = 0; r < SIZE; r++)
+        for (let c = 0; c < SIZE; c++) {
+          const t = this.grid[r][c];
+          if (!t) return true;
+          if (c + 1 < SIZE && this.grid[r][c + 1] &&
+              this.grid[r][c + 1].value === t.value) return true;
+          if (r + 1 < SIZE && this.grid[r + 1][c] &&
+              this.grid[r + 1][c].value === t.value) return true;
+        }
+      return false;
+    }
+  }
+
+  function emptyGrid() {
+    return Array.from({ length: SIZE }, () => Array(SIZE).fill(null));
+  }
+
+  /* 纯值版本的单行滑动(供测试与对照) */
+  function slideLineValues(line) {
+    const tiles = line.filter((v) => v);
+    const out = [];
+    let gained = 0, i = 0;
+    while (i < tiles.length) {
+      if (i + 1 < tiles.length && tiles[i] === tiles[i + 1]) {
+        out.push(tiles[i] * 2);
+        gained += tiles[i] * 2;
+        i += 2;
+      } else {
+        out.push(tiles[i]);
+        i++;
+      }
+    }
+    while (out.length < line.length) out.push(0);
+    return [out, gained];
+  }
+
+  const api = { SIZE, Tile, Game, slideLineValues };
+  global.Game2048Core = api;
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+})(typeof window !== "undefined" ? window : globalThis);
+
+(function () {
+  "use strict";
+  const CELL = 78, GAP = 6, SLIDE = 110;
+  const core = window.Game2048Core;
+
+  const board = document.getElementById("board");
+  const overlay = document.getElementById("overlay");
+  const ovTitle = document.getElementById("ovTitle");
+  const ovText = document.getElementById("ovText");
+  const ovBtns = document.getElementById("ovBtns");
+  const scoreEl = document.getElementById("score");
+  const bestEl = document.getElementById("best");
+
+  function loadBest() {
+    try { return parseInt(localStorage.getItem("modern_2048_best") || "0", 10) || 0; }
+    catch (e) { return 0; }
+  }
+  function saveBest(v) {
+    try { localStorage.setItem("modern_2048_best", String(v)); } catch (e) {}
+  }
+
+  let game = null, animating = false, winShown = false;
+
+  function posXY(r, c) {
+    return [GAP + c * (CELL + GAP), GAP + r * (CELL + GAP)];
+  }
+  function faceClass(v) {
+    return v <= 2048 ? "t" + v : "tsuper";
+  }
+  function styleFace(face, v) {
+    face.className = "face " + faceClass(v) + (v >= 1000 ? (v >= 1024 ? " f4" : " f3") : v >= 100 ? " f3" : "");
+  }
+
+  function makeNode(t, anim) {
+    const el = document.createElement("div");
+    el.className = "tile";
+    const face = document.createElement("div");
+    t.el = el; t.faceEl = face;
+    restyle(t, false);
+    const [x, y] = posXY(t.r, t.c);
+    el.style.transform = "translate(" + x + "px," + y + "px)";
+    el.appendChild(face);
+    board.appendChild(el);
+    if (anim === "spawn") forceAnim(face, "spawn");
+    return el;
+  }
+
+  function restyle(t, pop) {
+    const face = t.faceEl;
+    const keep = face.className.match(/\b(f3|f4)\b/);
+    styleFace(face, t.value);
+    face.textContent = t.value;
+    if (pop) forceAnim(face, "pop");
+  }
+
+  function forceAnim(face, name) {
+    face.classList.remove("spawn", "pop");
+    void face.offsetWidth;              // 重置动画
+    face.classList.add(name);
+  }
+
+  function positionAll() {
+    for (const t of game.tiles) {
+      const [x, y] = posXY(t.r, t.c);
+      t.el.style.transform = "translate(" + x + "px," + y + "px)";
+    }
+  }
+
+
+  function updateScore() {
+    scoreEl.textContent = game.score;
+    bestEl.textContent = game.best;
+  }
+
+  function showOverlay(title, text, buttons) {
+    ovTitle.textContent = title;
+    ovText.textContent = text;
+    ovBtns.innerHTML = "";
+    for (const b of buttons) {
+      const btn = document.createElement("button");
+      btn.className = b.primary ? "primary" : "ghost";
+      btn.textContent = b.label;
+      btn.onclick = b.onClick;
+      ovBtns.appendChild(btn);
+    }
+    overlay.classList.remove("hidden");
+  }
+  function hideOverlay() { overlay.classList.add("hidden"); }
+
+  function checkEnd() {
+    if (game.won && !winShown) {
+      winShown = true;
+      showOverlay("🎉 达成 2048!",
+        "当前得分 " + game.score + "\n继续冲击更高分,还是开新的一局?",
+        [
+          { label: "继续挑战", onClick: hideOverlay },
+          { label: "再来一局", primary: true, onClick: restart },
+        ]);
+    } else if (game.over) {
+      showOverlay("游戏结束",
+        "本局得分:" + game.score + "\n最高纪录:" + game.best,
+        [{ label: "再来一局", primary: true, onClick: restart }]);
+    }
+  }
+
+  function doMove(dir) {
+    if (animating || !game || game.over) return;
+    const g = game;
+    if (!g.move(dir)) return;
+    animating = true;
+    saveBest(g.best);
+    updateScore();
+    positionAll();                       // CSS 过渡播放滑动
+    setTimeout(function () {
+      if (game !== g) return;            // 动画期间被重开,丢弃过期回调
+      const dead = g.tiles.filter(function (t) { return t.dying; });
+      const grewTiles = g.tiles.filter(function (t) { return t.grew; });
+      const spawned = g.commit();
+      dead.forEach(function (t) { if (t.el) t.el.remove(); });
+      grewTiles.forEach(function (t) { restyle(t, true); t.grew = false; });
+      if (spawned) makeNode(spawned, "spawn");
+      animating = false;
+      checkEnd();
+    }, SLIDE);
+  }
+
+  function restart() {
+    hideOverlay();
+    winShown = false;
+    // 清掉全部方块节点(保留 16 个槽位)
+    board.querySelectorAll(".tile").forEach(function (el) { el.remove(); });
+    game.reset();
+    for (const t of game.tiles) makeNode(t, "spawn");
+    updateScore();
+  }
+
+  /* ---- 输入 ---- */
+  const KEYMAP = {
+    ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right",
+    w: "up", s: "down", a: "left", d: "right",
+    W: "up", S: "down", A: "left", D: "right",
+  };
+  window.addEventListener("keydown", function (e) {
+    if (e.key === "r" || e.key === "R") { restart(); return; }
+    const dir = KEYMAP[e.key];
+    if (dir) { e.preventDefault(); doMove(dir); }
+  });
+
+  let swipeStart = null;
+  const wrap = document.getElementById("boardWrap");
+  wrap.addEventListener("pointerdown", function (e) {
+    swipeStart = [e.clientX, e.clientY];
+  });
+  window.addEventListener("pointerup", function (e) {
+    if (!swipeStart) return;
+    const dx = e.clientX - swipeStart[0], dy = e.clientY - swipeStart[1];
+    swipeStart = null;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < 24) return;
+    if (Math.abs(dx) > Math.abs(dy)) doMove(dx > 0 ? "right" : "left");
+    else doMove(dy > 0 ? "down" : "up");
+  });
+
+  document.getElementById("newGame").onclick = restart;
+
+  /* ---- 启动 ---- */
+  game = new core.Game(loadBest);
+  for (let r = 0; r < core.SIZE; r++)
+    for (let c = 0; c < core.SIZE; c++) {
+      const slot = document.createElement("div");
+      slot.className = "slot";
+      const [x, y] = posXY(r, c);
+      slot.style.left = x + "px"; slot.style.top = y + "px";
+      board.appendChild(slot);
+    }
+  for (const t of game.tiles.slice()) makeNode(t, "spawn");
+  updateScore();
+})();
+</script>
+</body>
+</html>
