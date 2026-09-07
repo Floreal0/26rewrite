@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>CQB 战术行动 · 二期</title>
+<style>
+  html, body { margin:0; height:100%; overflow:hidden; background:#05070C; }
+  #cv { display:block; width:100vw; height:100vh; }
+  /* 对局进行中隐藏系统光标(自绘准星);暂停/结算覆盖层弹起时恢复,否则用户找不到鼠标 */
+  #cv.playing { cursor:none; }
+  .hud { position:fixed; font-family:"Segoe UI",system-ui,"Microsoft YaHei",sans-serif;
+         color:#E8ECF5; pointer-events:none; z-index:5; }
+  .hidden { display:none !important; }
+
+  /* ---- 主菜单 ---- */
+  #menu, #panelSettings, #panelJoin, #panelWait, #panelSignal, #panelHelp {
+    inset:0; z-index:30; display:flex; align-items:center; justify-content:center;
+    background:rgba(5,7,12,.92); pointer-events:auto;
+  }
+  .panel { width:300px; text-align:center; }
+  .panel-wide { width:640px; max-width:94vw; }
+  .panel h1 { font-size:34px; margin:0 0 6px; letter-spacing:2px; }
+  .panel h2 { font-size:22px; margin:0 0 6px; letter-spacing:1px; }
+  .bar { width:86px; height:5px; border-radius:3px; margin:0 auto 24px;
+         background:linear-gradient(90deg,#7C5CFF,#FF5C7A); }
+  .mbtn { display:block; width:100%; margin-bottom:14px; padding:14px;
+          background:rgba(124,92,255,.12); border:1px solid rgba(124,92,255,.45);
+          border-radius:12px; color:#E8ECF5; font-size:17px; cursor:pointer;
+          transition:background .15s, transform .1s; }
+  .mbtn:hover:not(:disabled) { background:rgba(124,92,255,.3); transform:translateY(-2px); }
+  .mbtn:disabled { opacity:.35; cursor:not-allowed; }
+  .mbtn small { display:block; font-size:11px; color:#8E93B0; margin-top:4px; }
+  .tip { font-size:12px; color:#8E93B0; line-height:1.7; }
+  .row { display:flex; gap:10px; }
+  .row .mbtn { flex:1; }
+
+  /* ---- 建房 Bot 选择 ---- */
+  .botgrid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:16px 0; }
+  .botpick { padding:14px 0; font-size:15px; background:rgba(124,92,255,.06);
+             border:1px solid rgba(124,92,255,.25); border-radius:10px;
+             color:#E8ECF5; cursor:pointer; }
+  .botpick.sel { background:rgba(124,92,255,.4); border-color:rgba(124,92,255,.85);
+                 font-weight:700; box-shadow:0 0 12px rgba(124,92,255,.4); }
+  .setting-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:12px 0 18px; }
+  .setting-grid-2 { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin:12px 0 18px; }
+  .setting-option { padding:12px 6px; font-size:14px; background:rgba(124,92,255,.06);
+                   border:1px solid rgba(124,92,255,.25); border-radius:10px;
+                   color:#E8ECF5; cursor:pointer; }
+  .setting-option.sel { background:rgba(124,92,255,.4); border-color:rgba(124,92,255,.85);
+                       font-weight:700; box-shadow:0 0 12px rgba(124,92,255,.4); }
+  .setting-option:disabled { opacity:.35; cursor:not-allowed; }
+  .setting-option small { display:block; color:#8E93B0; font-size:11px; margin-top:3px; }
+
+  /* ---- 游戏说明 ---- */
+  .help-body { max-height:66vh; overflow-y:auto; text-align:left;
+    background:rgba(0,0,0,.25); border:1px solid rgba(124,92,255,.25);
+    border-radius:10px; padding:14px 18px; margin-bottom:14px;
+    font-size:13px; line-height:1.85; color:#C9CEE8; }
+  .help-body h3 { color:#E8ECF5; font-size:15px; margin:12px 0 6px; }
+  .help-body h3:first-child { margin-top:0; }
+  .help-body table { width:100%; border-collapse:collapse; margin:6px 0; }
+  .help-body th, .help-body td { border:1px solid rgba(124,92,255,.25);
+    padding:4px 8px; font-size:12px; text-align:center; }
+  .help-body th { color:#8E93B0; font-weight:600; background:rgba(124,92,255,.08); }
+  .help-body td b { color:#E8ECF5; }
+  .help-body .hl { color:#FFC24B; }
+  .help-maprow { display:flex; gap:14px; align-items:center; margin:10px 0; }
+  .help-mapcv { border:1px solid rgba(124,92,255,.35); border-radius:6px; flex:none; }
+  .help-mapinfo { font-size:12px; color:#8E93B0; line-height:1.75; }
+  .help-mapinfo b { color:#E8ECF5; font-size:14px; }
+
+  /* ---- 加入输入 ---- */
+  .join-row { display:flex; gap:8px; margin:18px 0; }
+  .join-row input { flex:1; padding:12px; font-size:18px; text-align:center;
+                   font-family:monospace; background:rgba(0,0,0,.4);
+                   border:1px solid rgba(124,92,255,.35); border-radius:8px;
+                   color:#E8ECF5; text-transform:uppercase; letter-spacing:2px; }
+  .join-row input:focus { outline:none; border-color:#7C5CFF; }
+  .err-msg { font-size:12px; color:#FF6B6B; min-height:16px; margin-bottom:8px; }
+
+  /* ---- 等待房 ---- */
+  .roomcode { font-family:monospace; font-size:32px; letter-spacing:6px;
+              color:#FFC24B; padding:16px 0; margin:12px 0;
+              background:rgba(0,0,0,.3); border-radius:10px;
+              border:1px dashed rgba(255,194,75,.4); }
+  .wait-hint { color:#8E93B0; font-size:13px; }
+  .pulse { animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity:.4; } 50% { opacity:1; } }
+
+  /* ---- 游戏 HUD ---- */
+  #chips { top:144px; left:14px; display:flex; gap:10px; font-size:14px; }
+  .chip { background:rgba(10,14,24,.72); border:1px solid rgba(124,92,255,.25);
+          border-radius:10px; padding:6px 14px; }
+  .chip b { color:#CFD3FF; }
+  #killfeed { top:64px; right:16px; text-align:right; font-size:13px; }
+  #killfeed div { margin-bottom:4px; background:rgba(10,14,24,.6);
+                  padding:4px 10px; border-radius:8px; }
+  #roomname { top:14px; left:50%; transform:translateX(-50%);
+              font-size:16px; letter-spacing:3px; color:#CFD3FF;
+              text-shadow:0 2px 8px rgba(0,0,0,.85); }
+  #objbar { top:44px; left:50%; transform:translateX(-50%); font-size:14px;
+            color:#E8ECF5; background:rgba(10,14,24,.72); padding:6px 14px;
+            border-radius:8px; border:1px solid rgba(124,92,255,.4);
+            letter-spacing:1px; white-space:pre; }
+  #weapon { bottom:26px; right:22px; text-align:right; }
+  #wname { font-size:16px; font-weight:700; letter-spacing:1px; }
+  #ammo { font-size:30px; font-weight:700; color:#CFD3FF; }
+  #reload { width:150px; height:5px; background:rgba(255,255,255,.15);
+            border-radius:3px; margin-top:6px; margin-left:auto; overflow:hidden; }
+  #reloadFill { height:100%; width:0%; background:#FFC24B; }
+  #hpwrap { bottom:26px; left:50%; transform:translateX(-50%); width:280px; }
+  #hpbg { height:12px; background:rgba(255,255,255,.12); border-radius:6px; overflow:hidden; }
+  #hpfill { height:100%; width:100%; background:#5AD07A; transition:width .12s; }
+  #hptext { font-size:12px; text-align:center; margin-top:4px; color:#B9BEE8; }
+  #modetext { font-size:12px; text-align:center; margin-top:3px; color:#8E93B0;
+              letter-spacing:1px; }
+  #vignette { inset:0; background:radial-gradient(circle, transparent 55%,
+              rgba(255,40,40,.55)); opacity:0; transition:opacity .25s; z-index:6; }
+  #flashwhite { inset:0; background:#FFFFFF; opacity:0; z-index:8; }
+  #respawnTxt { inset:0; display:flex; align-items:center; justify-content:center;
+                font-size:30px; font-weight:700; color:#FF7B7B;
+                text-shadow:0 2px 12px rgba(0,0,0,.8); z-index:7; }
+  #hint { bottom:96px; left:50%; transform:translateX(-50%); font-size:14px;
+          color:#FFC24B; background:rgba(10,14,24,.7); padding:6px 14px;
+          border-radius:8px; border:1px solid rgba(255,194,75,.4); }
+  #center { inset:0; display:flex; align-items:center; justify-content:center;
+            flex-direction:column; background:rgba(4,6,12,.66); z-index:8; }
+  #center h2 { font-size:40px; margin:0 0 10px; }
+  #center p { color:#B9BEE8; margin:0 0 24px; font-size:15px; }
+  #center button { pointer-events:auto; background:#7C5CFF; color:#fff; border:none;
+                   border-radius:10px; padding:12px 30px; font-size:17px; cursor:pointer; }
+  #center .btnrow { display:flex; gap:14px; }
+  #pauseMenu { inset:0; display:flex; align-items:center; justify-content:center;
+               flex-direction:column; background:rgba(4,6,12,.78); z-index:9; }
+  #pauseMenu h2 { font-size:36px; margin:0 0 22px; }
+  #pauseMenu button { pointer-events:auto; background:#7C5CFF; color:#fff; border:none;
+                      border-radius:10px; padding:12px 0; font-size:17px; cursor:pointer;
+                      margin:5px 0; width:230px; }
+  #pauseMenu button:hover { filter:brightness(1.15); }
+
+  /* ---- 小地图 ---- */
+  #minimap { position:fixed; top:14px; left:14px; z-index:5;
+             border:1px solid rgba(124,92,255,.35); border-radius:8px;
+             box-shadow:0 6px 18px rgba(0,0,0,.5); pointer-events:none; }
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<canvas id="minimap" class="hud hidden" width="168" height="120"></canvas>
+
+<!-- 游戏 HUD(进入对局后显示) -->
+<div id="gamehud" class="hidden">
+  <div class="hud" id="chips">
+    <div class="chip" style="line-height:1.6;text-align:center">
+      <div>我方 <b id="kills">0</b> / <span id="killtarget">15</span></div>
+      <div>敌方 <b id="ekills">0</b> / <span id="killtarget2">15</span></div>
+    </div>
+    <div class="chip" style="line-height:1.6;text-align:center">
+      <div>击杀 <b id="mykills">0</b></div>
+      <div>死亡 <b id="deaths">0</b></div>
+    </div>
+  </div>
+  <div class="hud" id="killfeed"></div>
+  <div class="hud" id="roomname"></div>
+  <div class="hud hidden" id="objbar"><span id="objtext"></span></div>
+  <div class="hud" id="weapon">
+    <div id="wname">步枪</div>
+    <div id="ammo"><span id="mag">30</span><span style="font-size:14px;color:#8E93B0"> / <span id="reserve">300</span></span></div>
+    <div id="reload"><div id="reloadFill"></div></div>
+  </div>
+  <div class="hud" id="hpwrap">
+    <div id="hpbg"><div id="hpfill"></div></div>
+    <div id="hptext">100 / 100</div>
+    <div id="modetext"></div>
+  </div>
+  <div class="hud" id="vignette"></div>
+  <div class="hud" id="flashwhite"></div>
+  <div class="hud hidden" id="hint"></div>
+  <div class="hud hidden" id="respawnTxt"></div>
+  <div class="hud" id="center">
+    <h2 id="ovTitle">战术行动</h2>
+    <p id="ovText">消灭 BOT,率先达成 15 杀。</p>
+    <button id="startBtn">开始行动</button>
+  </div>
+  <div class="hud hidden" id="pauseMenu">
+    <h2>⏸ 已暂停</h2>
+    <button id="pauseResumeBtn">继续对局</button>
+    <button id="pauseRestartBtn">重新开始</button>
+    <button id="pauseExitBtn">回到主菜单</button>
+  </div>
+</div>
+
+<!-- 主菜单 -->
+<div id="menu" class="hud">
+  <div class="panel">
+    <h1>CQB 战术行动</h1>
+    <div class="bar"></div>
+    <button class="mbtn" id="btnSolo">🎯 单人练习<small>5 张地图 · 1v1/2v2/3v3 · 死斗/解救/占点</small></button>
+    <button class="mbtn" id="btnHost">🌐 创建房间<small>同一 WiFi 输房间码即连</small></button>
+    <button class="mbtn" id="btnJoin">🔗 加入房间<small>输入房主的房间码</small></button>
+    <button class="mbtn" id="btnHelp">📖 游戏说明<small>玩法规则 · 武器数据 · 地图一览</small></button>
+    <p class="tip">WASD 移动 · 鼠标瞄准射击 · 1/2/3 切枪<br>R 换弹 · Shift 静步 · 视野有限,注意拐角</p>
+  </div>
+</div>
+
+<!-- 对局设置:单人练习/创建房间共用 -->
+<div id="panelSettings" class="hud hidden">
+  <div class="panel">
+    <h2>对局设置</h2>
+    <div class="bar"></div>
+    <p class="tip">选择地图</p>
+    <div class="setting-grid">
+      <button class="setting-option sel" id="mapOffice">办公楼</button>
+      <button class="setting-option" id="mapPort">集装箱码头</button>
+      <button class="setting-option" id="mapAlley">城中村巷战</button>
+      <button class="setting-option" id="mapMetro">地铁站</button>
+      <button class="setting-option" id="mapMall">商场中庭</button>
+    </div>
+    <p class="tip">对战规模</p>
+    <div class="setting-grid">
+      <button class="setting-option sel" id="mode1v1">1v1</button>
+      <button class="setting-option" id="mode2v2">2v2</button>
+      <button class="setting-option" id="mode3v3">3v3</button>
+    </div>
+    <!-- 阵营结构:联机建房专属二级选项,2v2/3v3 时显示(1v1 固定对抗;单人无此项) -->
+    <div id="teamStyleWrap" class="hidden">
+      <p class="tip">阵营结构<small style="display:block">联机建房可选 · 由房主决定</small></p>
+      <div class="setting-grid-2">
+        <button class="setting-option sel" id="styleAdversarial">对抗模式</button>
+        <button class="setting-option" id="styleCoop">团队模式</button>
+      </div>
+    </div>
+    <p class="tip">玩法模式</p>
+    <div class="setting-grid">
+      <button class="setting-option sel" id="playTdm">死斗模式<small>先达击杀阈值</small></button>
+      <button class="setting-option" id="playRescue">解救模式<small>营救人质并撤离</small></button>
+      <button class="setting-option" id="playPoint">占点模式<small>占领据点累积分数</small></button>
+    </div>
+    <button class="mbtn" id="settingsStartBtn">开始</button>
+    <button class="mbtn" id="settingsBackBtn" style="background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.15)">返回</button>
+  </div>
+</div>
+
+<!-- 加入房间:输入房间码 -->
+<div id="panelJoin" class="hud hidden">
+  <div class="panel">
+    <h2>加入房间</h2>
+    <div class="bar"></div>
+    <p class="tip" style="margin-bottom:8px">询问房主获取 4~6 位房间码</p>
+    <div class="join-row">
+      <span style="display:flex;align-items:center;color:#8E93B0;font-family:monospace;font-size:18px">cqb-</span>
+      <input id="joinInput" maxlength="6" placeholder="XXXXXX" autocomplete="off" spellcheck="false" />
+    </div>
+    <div class="err-msg" id="joinError">&nbsp;</div>
+    <button class="mbtn" id="joinOkBtn">加入</button>
+    <button class="mbtn" id="joinCancelBtn" style="background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.15)">取消</button>
+  </div>
+</div>
+
+<!-- SDP 互传面板:建房/加入通用,显示 SDP 文本 + 粘贴对方 SDP -->
+<div id="panelSignal" class="hud hidden">
+  <div class="panel">
+    <h2 id="signalTitle">1. 把这段 offer 复制给加入者</h2>
+    <div class="bar"></div>
+    <p class="wait-hint" id="signalCode"></p>
+    <textarea id="signalText" readonly style="
+      width: 100%; min-height: 80px; max-height: 200px;
+      background: #0A0D16; color: #E8ECF5;
+      border: 1px solid #39415A; border-radius: 4px;
+      padding: 6px; font-family: monospace; font-size: 11px;
+      word-break: break-all; resize: vertical;
+    "></textarea>
+    <button class="mbtn" id="signalCopyBtn">复制文本</button>
+    <div id="signalAnswerWrap" class="hidden" style="margin-top: 12px">
+      <p class="wait-hint">粘贴对方发回的文本:</p>
+      <textarea id="signalAnswerInput" style="
+        width: 100%; min-height: 60px; max-height: 160px;
+        background: #0A0D16; color: #E8ECF5;
+        border: 1px solid #39415A; border-radius: 4px;
+        padding: 6px; font-family: monospace; font-size: 11px;
+        word-break: break-all; resize: vertical;
+      "></textarea>
+    </div>
+    <p class="wait-hint pulse" id="signalPhase">等待中…</p>
+    <button class="mbtn" id="signalOkBtn">已复制,等待 answer</button>
+    <button class="mbtn" id="signalCancelBtn" style="background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.15)">取消</button>
+  </div>
+</div>
+
+<!-- 游戏说明:面向玩家的完整规则/数值/地图一览 -->
+<div id="panelHelp" class="hud hidden">
+  <div class="panel panel-wide">
+    <h2>游戏说明</h2>
+    <div class="bar"></div>
+    <div id="helpBody" class="help-body"></div>
+    <button class="mbtn" id="helpBackBtn">返回</button>
+  </div>
+</div>
+
+<!-- 等待房:展示房间码(保留兼容,实际不直接用) -->
+<div id="panelWait" class="hud hidden">
+  <div class="panel">
+    <h2>等待加入</h2>
+    <div class="bar"></div>
+    <p class="wait-hint">将以下房间码告诉你的朋友</p>
+    <div class="roomcode" id="roomCode">cqb-XXXX</div>
+    <button class="mbtn" id="copyCodeBtn">复制房间码</button>
+    <p class="wait-hint pulse" id="waitStatus">等待玩家加入…</p>
+    <button class="mbtn" id="waitCancelBtn" style="background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.15)">取消</button>
+  </div>
+</div>
+
+<script>window.CQB_NO_AUTOBOOT = true;</script>
+<script src="vendor/mqtt.min.js"></script>
+<script src="shared.js"></script>
+<script src="maps.js"></script>
+<script src="engine.js"></script>
+<script src="rules.js"></script>
+<script src="channel.js"></script>
+<script src="host.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
